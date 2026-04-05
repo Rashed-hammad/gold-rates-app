@@ -66,14 +66,14 @@ function GoldPrice() {
         <div className="gold-card buy">
           <span className="card-label">Buy</span>
           <span className="card-price">
-            {data?.buy !== null ? `USD ${data.buy.toLocaleString()}` : "—"}
+            {data ? `USD ${data.buy.toLocaleString()}` : "—"}
           </span>
           <span className="card-unit">per troy oz</span>
         </div>
         <div className="gold-card sell">
           <span className="card-label">Sell</span>
           <span className="card-price">
-            {data?.sell !== null ? `USD ${data.sell.toLocaleString()}` : "—"}
+            {data ? `USD ${data.sell.toLocaleString()}` : "—"}
           </span>
           <span className="card-unit">per troy oz</span>
         </div>
@@ -82,7 +82,7 @@ function GoldPrice() {
         <h3 className="lira-title">Gold Lira Coin</h3>
         <div className="gold-card lira">
           <span className="card-price">
-            {data?.lira !== null
+            {data
               ? `USD ${data.lira.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : "—"}
           </span>
