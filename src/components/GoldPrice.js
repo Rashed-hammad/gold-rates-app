@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./GoldPrice.css";
 
 function getNow() {
@@ -18,6 +18,43 @@ function GoldPrice() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [spinning, setSpinning] = useState(false);
   const [error, setError] = useState(null);
+  const [alertTarget, setAlertTarget] = useState("");
+  const [activeAlert, setActiveAlert] = useState(() => {
+    const saved = localStorage.getItem("goldAlertTarget");
+    return saved ? parseFloat(saved) : null;
+  });
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "denied"
+  );
+
+  const activeAlertRef = useRef(activeAlert);
+  useEffect(() => {
+    activeAlertRef.current = activeAlert;
+  }, [activeAlert]);
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().then((perm) => setNotifPermission(perm));
+    }
+  }, []);
+
+  function checkAlert(lira) {
+    const target = activeAlertRef.current;
+    if (target === null) return;
+    if (lira <= target) {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("Gold Alert: Target Reached!", {
+          body: `Gold lira coin is now USD ${lira.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} — your target was $${target.toLocaleString()}.`,
+          icon: "",
+        });
+      }
+      setActiveAlert(null);
+      localStorage.removeItem("goldAlertTarget");
+    }
+  }
 
   async function fetchGoldPrice() {
     setSpinning(true);
@@ -38,12 +75,18 @@ function GoldPrice() {
       .then((result) => {
         const json = JSON.parse(result);
         console.log("API response:", json);
+        if (!json.ask || !json.bid || !json.price_gram_21k) {
+          setError("Invalid response from API. Try again.");
+          return;
+        }
+        const lira = json.price_gram_21k * 8;
         setData({
           buy: json.ask,
           sell: json.bid,
-          lira: json.price_gram_21k * 8,
+          lira,
         });
         setUpdatedAt(getNow());
+        checkAlert(lira);
       })
       .catch(() => setError("Could not load price. Try again."))
       .finally(() => setSpinning(false));
@@ -51,9 +94,25 @@ function GoldPrice() {
 
   useEffect(() => {
     fetchGoldPrice();
-    // const interval = setInterval(fetchGoldPrice, 120000);
-    // return () => clearInterval(interval);
+    const interval = setInterval(fetchGoldPrice, 120000);
+    return () => clearInterval(interval);
   }, []);
+
+  function handleSetAlert() {
+    const val = parseFloat(alertTarget);
+    if (!val || val <= 0) return;
+    setActiveAlert(val);
+    localStorage.setItem("goldAlertTarget", val);
+    setAlertTarget("");
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().then((perm) => setNotifPermission(perm));
+    }
+  }
+
+  function handleCancelAlert() {
+    setActiveAlert(null);
+    localStorage.removeItem("goldAlertTarget");
+  }
 
   return (
     <div className="gold-price-container">
@@ -144,7 +203,7 @@ function GoldPrice() {
               onChange={(e) => setCoinCount(e.target.value)}
               className="coin-input"
             />
-            {coinCount > 0 && data?.lira !== null && (
+            {coinCount > 0 && data && (
               <p className="coin-total">
                 {coinCount} coin{coinCount !== 1 ? "s" : ""} ={" "}
                 <strong>
@@ -158,6 +217,37 @@ function GoldPrice() {
             )}
           </div>
         )}
+
+        <div className="alert-section">
+          {activeAlert ? (
+            <div className="alert-active">
+              <span className="alert-active-label">
+                Alert set: ≤ USD {activeAlert.toLocaleString()}
+              </span>
+              <button className="alert-cancel-btn" onClick={handleCancelAlert} title="Cancel alert">
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="alert-input-row">
+              <input
+                type="number"
+                min="0"
+                placeholder="Target price (USD)"
+                value={alertTarget}
+                onChange={(e) => setAlertTarget(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSetAlert()}
+                className="coin-input"
+              />
+              <button className="alert-set-btn" onClick={handleSetAlert}>
+                Set Alert
+              </button>
+            </div>
+          )}
+          {notifPermission === "denied" && (
+            <p className="alert-warning">Enable notifications in browser settings to receive alerts.</p>
+          )}
+        </div>
       </div>
       <button
         className={`refresh-btn ${spinning ? "spinning" : ""}`}
